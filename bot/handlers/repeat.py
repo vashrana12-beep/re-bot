@@ -16,14 +16,25 @@ async def repeat_handler(event):
             if not await chats.find_one({"chat_id": chat_id}):
                 return await conv.send_message("❌ Chat not registered.")
 
-            await conv.send_message("Send the content (Text or Media):")
+            await conv.send_message("Send the content (Text, Link, or Media):")
             msg = await conv.get_response()
             
+            # --- THIS IS THE UPDATED PART ---
             content_type, content, caption = "text", msg.text, ""
-            if msg.media:
+            
+            # Check if it has media AND is an actual file (this ignores link previews)
+            if msg.media and hasattr(msg, 'file') and msg.file:
                 content = msg.file.id
-                caption = msg.text
-                content_type = "document"
+                caption = msg.text or ""
+                if msg.photo: 
+                    content_type = "photo"
+                elif msg.video: 
+                    content_type = "video"
+                elif msg.gif: 
+                    content_type = "gif"
+                else: 
+                    content_type = "document"
+            # --------------------------------
                 
             await conv.send_message("Interval in minutes:")
             interval = int((await conv.get_response()).text)
