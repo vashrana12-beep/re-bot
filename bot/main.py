@@ -6,7 +6,7 @@ from bot.scheduler import scheduler, load_recovery_jobs
 import bot.scheduler as scheduler_module
 
 # Import Handlers
-from bot.handlers.start import start_handler
+from bot.handlers.start import start_handler, help_handler
 from bot.handlers.chat_management import detect_handler, deletechat_handler
 from bot.handlers.schedule import schedule_handler
 from bot.handlers.repeat import repeat_handler
@@ -31,6 +31,7 @@ async def main():
 
     # Register Handlers
     bot.add_event_handler(start_handler)
+    bot.add_event_handler(help_handler)
     bot.add_event_handler(detect_handler)
     bot.add_event_handler(deletechat_handler)
     bot.add_event_handler(schedule_handler)
