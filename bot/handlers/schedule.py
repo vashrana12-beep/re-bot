@@ -18,15 +18,17 @@ async def schedule_handler(event):
                 return await conv.send_message("❌ Chat not registered. Use /detect first.")
 
             # 2. Ask for Content
-            await conv.send_message("Send the content (Text, Photo, Video, Document):")
+            await conv.send_message("Send the content (Text, Link, Photo, Video, Document):")
             content_msg = await conv.get_response()
             
             content_type = "text"
             content = content_msg.text
             caption = ""
-            if content_msg.media:
+            
+            # If it has media AND it's an actual file (ignores link previews)
+            if content_msg.media and hasattr(content_msg, 'file') and content_msg.file:
                 content = content_msg.file.id
-                caption = content_msg.text
+                caption = content_msg.text or ""
                 if content_msg.photo: content_type = "photo"
                 elif content_msg.video: content_type = "video"
                 elif content_msg.gif: content_type = "gif"
