@@ -30,7 +30,8 @@ async def execute_automation(automation_id: int):
             )
         
         if auto.get("auto_delete"):
-            run_date = datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=auto["delete_after_minutes"])
+            # Ensure this is also safely timezone-aware
+            run_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=auto["delete_after_minutes"])
             scheduler.add_job(
                 delete_message_job, 'date', run_date=run_date,
                 args=[auto["chat_id"], msg.id]
@@ -52,16 +53,30 @@ def schedule_job(auto_data: dict):
     if scheduler.get_job(job_id):
         return
 
+    # ---- CRITICAL TIMEZONE FIX ----
+    # 1. Safely extract the schedule time
+    sched_time = auto_data.get("schedule_time")
+    
+    # 2. If it exists but has no timezone (naive), force it to be UTC
+    if sched_time is not None:
+        if sched_time.tzinfo is None:
+            sched_time = sched_time.replace(tzinfo=datetime.timezone.utc)
+            
+    # 3. Create a strict, timezone-aware "now" for comparison
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    # -------------------------------
+
     if auto_data["type"] == "schedule":
         if auto_data.get("repeat_interval"):
             scheduler.add_job(
                 execute_automation, 'interval', minutes=auto_data["repeat_interval"],
-                start_date=auto_data["schedule_time"], id=job_id, args=[auto_data["automation_id"]]
+                start_date=sched_time, id=job_id, args=[auto_data["automation_id"]]
             )
         else:
-            if auto_data["schedule_time"] > datetime.datetime.utcnow():
+            # Compare aware to aware
+            if sched_time > now_utc:
                 scheduler.add_job(
-                    execute_automation, 'date', run_date=auto_data["schedule_time"],
+                    execute_automation, 'date', run_date=sched_time,
                     id=job_id, args=[auto_data["automation_id"]]
                 )
     elif auto_data["type"] == "repeat":
