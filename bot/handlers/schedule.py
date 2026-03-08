@@ -1,4 +1,4 @@
-mn,h,bn,import datetime
+import datetime
 import asyncio
 from telethon import events
 from bot.database import automations, get_next_sequence, chats
