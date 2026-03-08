@@ -14,11 +14,14 @@ COPY requirements.txt .
 # Install your dependencies (like aiogram, pyrogram, motor, etc.)
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy the rest of your bot's source code into the 
+# ... keep the top parts exactly the same ...
+
 # Copy the rest of your bot's source code into the container
 COPY . .
 
-# ---> NEW FIX: Move inside the 'bot' folder before running <---
-WORKDIR /app/bot
+# Move the working directory back to /app (the root)
+WORKDIR /app
 
-# Command to execute your bot
-CMD ["python", "main.py"]
+# Run the bot using the module path
+CMD ["python", "-m", "bot.main"]
