@@ -59,7 +59,7 @@ def schedule_job(auto_data: dict):
                 start_date=auto_data["schedule_time"], id=job_id, args=[auto_data["automation_id"]]
             )
         else:
-            if auto_data["schedule_time"] > datetime.datetime.now():
+            if auto_data["schedule_time"] > datetime.datetime.utcnow():
                 scheduler.add_job(
                     execute_automation, 'date', run_date=auto_data["schedule_time"],
                     id=job_id, args=[auto_data["automation_id"]]
