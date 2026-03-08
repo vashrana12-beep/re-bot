@@ -17,5 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of your bot's source code into the container
 COPY . .
 
+# ---> NEW FIX: Move inside the 'bot' folder before running <---
+WORKDIR /app/bot
+
 # Command to execute your bot
 CMD ["python", "main.py"]
