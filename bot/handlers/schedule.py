@@ -1,4 +1,5 @@
 import datetime
+import asyncio
 from telethon import events
 from bot.database import automations, get_next_sequence, chats
 from bot.scheduler import schedule_job
@@ -37,7 +38,8 @@ async def schedule_handler(event):
             # 3. Datetime
             await conv.send_message("Send datetime in UTC (YYYY-MM-DD HH:MM):")
             time_msg = await conv.get_response()
-            schedule_time = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M").replace(tzinfo=datetime.UTC)
+            # ---> FIX 1: Removed .replace(tzinfo=datetime.UTC)
+            schedule_time = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M")
 
             # 4. Repeat
             await conv.send_message("Repeat? (ON/OFF):")
@@ -72,7 +74,8 @@ async def schedule_handler(event):
                 "auto_delete": auto_delete,
                 "delete_after_minutes": delete_after,
                 "status": "active",
-                "created_at": datetime.datetime.now(datetime.UTC)
+                # ---> FIX 2: Changed to utcnow()
+                "created_at": datetime.datetime.utcnow()
             }
             await automations.insert_one(auto_data)
             schedule_job(auto_data)
