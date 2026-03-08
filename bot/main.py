@@ -11,6 +11,7 @@ from bot.handlers.chat_management import detect_handler, deletechat_handler
 from bot.handlers.schedule import schedule_handler
 from bot.handlers.repeat import repeat_handler
 from bot.handlers.list import list_handler
+from bot.handlers.bulk import bulk_handler
 from bot.handlers.cancel import cancel_one_handler, stopall_handler
 from bot.handlers.user_management import adduser_handler, backup_handler
 
