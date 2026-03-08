@@ -40,7 +40,10 @@ async def bulk_handler(event):
             
             # 3. Wait for button clicks until confirmed
             while True:
-                response = await conv.wait_event(events.CallbackQuery(sender_id=event.sender_id))
+                # --- THIS IS THE CORRECTED LINE ---
+                response = await conv.wait_event(events.CallbackQuery(func=lambda e: e.sender_id == event.sender_id))
+                # ----------------------------------
+                
                 data = response.data.decode('utf-8')
                 
                 if data == "confirm_bulk":
