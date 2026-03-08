@@ -33,6 +33,7 @@ async def main():
     # Register Handlers
     bot.add_event_handler(start_handler)
     bot.add_event_handler(help_handler)
+    bot.add_event_handler(bulk_handler)
     bot.add_event_handler(detect_handler)
     bot.add_event_handler(deletechat_handler)
     bot.add_event_handler(schedule_handler)
