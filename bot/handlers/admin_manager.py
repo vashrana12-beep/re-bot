@@ -1,52 +1,64 @@
 import asyncio
 from telethon import events
+from telethon.tl.functions.channels import EditAdminRequest
+from telethon.tl.functions.messages import EditChatAdminRequest
+from telethon.tl.types import ChatAdminRights, Channel, Chat
 from bot.database import chats
 from bot.access_control import requires_role
 
-# This perfectly mimics your Pyrogram get_safe_privileges logic!
+# Helper to apply full permissions safely using Raw API (Matches Pyrogram exactly)
 async def set_admin_rights(client, chat_id, user_id, make_admin=True):
     try:
+        # Fetch entities correctly
+        chat_entity = await client.get_entity(chat_id)
+        user_entity = await client.get_input_entity(user_id)
+
         if not make_admin:
-            # Revokes admin privileges completely (like NO_PERMISSIONS)
-            await client.edit_admin(chat_id, user_id, is_admin=False)
+            # --- REVOKE ADMIN ---
+            if isinstance(chat_entity, Channel):
+                empty_rights = ChatAdminRights(
+                    change_info=False, post_messages=False, edit_messages=False,
+                    delete_messages=False, ban_users=False, invite_users=False,
+                    pin_messages=False, add_admins=False, anonymous=False,
+                    manage_call=False, other=False
+                )
+                await client(EditAdminRequest(channel=chat_entity, user_id=user_entity, admin_rights=empty_rights, rank=""))
+            else:
+                await client(EditChatAdminRequest(chat_id=chat_entity.id, user_id=user_entity, is_admin=False))
             return True, None
 
-        # Fetch the chat entity to check if it is a Channel or a Group
-        chat_entity = await client.get_entity(chat_id)
-        
-        # 'broadcast' is True for Channels, False for Groups
-        is_channel = getattr(chat_entity, 'broadcast', False)
-
-        if is_channel:
-            # --- CHANNEL LOGIC ---
-            # Matches Pyrogram's: post_messages, edit_messages, delete_messages, etc.
-            # NO anonymous, NO ban_users, NO pin_messages
-            await client.edit_admin(
-                chat_id, user_id,
-                change_info=True, 
-                post_messages=True, 
-                edit_messages=True,
-                delete_messages=True, 
-                invite_users=True,
-                add_admins=True, 
-                manage_call=True
-            )
-        else:
-            # --- GROUP LOGIC ---
-            # Matches Pyrogram's: delete_messages, restrict_members, pin_messages, anonymous=True
-            # NO post_messages, NO edit_messages
-            await client.edit_admin(
-                chat_id, user_id,
-                change_info=True, 
-                delete_messages=True, 
-                ban_users=True,       # This is restrict_members
-                invite_users=True,
-                pin_messages=True, 
-                add_admins=True, 
-                manage_call=True,
-                anonymous=True        # Anonymous is now safely set to True for Groups only!
-            )
+        if isinstance(chat_entity, Channel):
+            if chat_entity.broadcast:
+                # --- CHANNEL LOGIC ---
+                rights = ChatAdminRights(
+                    other=True,          # can_manage_chat (The Pyrogram secret!)
+                    change_info=True, 
+                    post_messages=True, 
+                    edit_messages=True,
+                    delete_messages=True, 
+                    invite_users=True,
+                    add_admins=True, 
+                    manage_call=True
+                )
+            else:
+                # --- MEGAGROUP LOGIC ---
+                rights = ChatAdminRights(
+                    other=True,          # can_manage_chat (CRITICAL for anonymous to work)
+                    change_info=True, 
+                    delete_messages=True, 
+                    ban_users=True,       
+                    invite_users=True,
+                    pin_messages=True, 
+                    add_admins=True, 
+                    manage_call=True,
+                    anonymous=True       # Hidden Admins will now work perfectly!
+                )
+            await client(EditAdminRequest(channel=chat_entity, user_id=user_entity, admin_rights=rights, rank=""))
             
+        elif isinstance(chat_entity, Chat):
+            # --- BASIC GROUP LOGIC ---
+            await client(EditChatAdminRequest(chat_id=chat_entity.id, user_id=user_entity, is_admin=True))
+
         return True, None
     except Exception as e:
         return False, str(e)
@@ -54,11 +66,10 @@ async def set_admin_rights(client, chat_id, user_id, make_admin=True):
 @events.register(events.NewMessage(pattern=r'^/(admin|deadmin)(?: (.*))?$', func=lambda e: e.is_private))
 @requires_role("owner")
 async def admin_manager_handler(event):
-    action = event.pattern_match.group(1) # 'admin' or 'deadmin'
+    action = event.pattern_match.group(1)
     args = event.pattern_match.group(2)
     is_promoting = (action == "admin")
 
-    # 1. Extract Target User ID
     target_user_id = None
     if event.is_reply:
         reply_msg = await event.get_reply_message()
@@ -70,7 +81,7 @@ async def admin_manager_handler(event):
         try:
             target_user_id = int(args.strip())
         except ValueError:
-            target_user_id = args.strip() # Allow @usernames
+            target_user_id = args.strip()
 
     if not target_user_id:
         return await event.respond("❌ Please provide a User ID, username, or reply to a forwarded message.")
@@ -78,7 +89,6 @@ async def admin_manager_handler(event):
     if target_user_id == event.sender_id:
         return await event.respond("⚠️ You cannot change your own admin status via the bot.")
 
-    # 2. Start Conversation for Target Chat
     async with event.client.conversation(event.chat_id, timeout=60) as conv:
         try:
             action_word = "make them an admin" if is_promoting else "remove their admin rights"
@@ -93,23 +103,19 @@ async def admin_manager_handler(event):
 
             status_msg = await conv.send_message("⏳ Processing request...")
 
-            # 3. Handle 'ALL' Broadcast
             if target_chat_input == "all":
                 success_count = 0
                 fail_count = 0
-                
                 async for chat_doc in chats.find():
                     success, error = await set_admin_rights(event.client, chat_doc["chat_id"], target_user_id, is_promoting)
                     if success:
                         success_count += 1
                     else:
                         fail_count += 1
-                    await asyncio.sleep(1) # Prevent FloodWaits
+                    await asyncio.sleep(1)
                 
                 word = "Promoted" if is_promoting else "Demoted"
                 await status_msg.edit(f"🌍 **Global Broadcast Complete!**\n✅ {word} in {success_count} chats.\n❌ Failed in {fail_count} chats.")
-
-            # 4. Handle Specific Chat ID
             else:
                 try:
                     specific_chat_id = int(target_chat_input)
