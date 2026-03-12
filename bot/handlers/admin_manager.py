@@ -3,37 +3,39 @@ from telethon import events
 from bot.database import chats
 from bot.access_control import requires_role
 
-# --- Helper function using your exact safe privileges logic ---
+# --- Helper function using strict Telethon privileges logic ---
 async def apply_admin_rights(client, chat_id, user_id, action="admin"):
     try:
         if action == "admin":
             entity = await client.get_entity(chat_id)
             is_channel = getattr(entity, 'broadcast', False)
-            
-            # Check if it's a Supergroup (megagroup) or just a basic Group
-            is_megagroup = getattr(entity, 'megagroup', False)
 
             if is_channel:
                 # Safe permissions specifically for Channels
+                # OMITTED: ban_users, pin_messages, anonymous
                 await client.edit_admin(
                     chat_id, user_id,
-                    change_info=True, post_messages=True, edit_messages=True,
-                    delete_messages=True, ban_users=False, invite_users=True,
-                    pin_messages=False, add_admins=True, manage_call=True,
-                    other=True # <-- CRITICAL: Telegram requires this base permission!
+                    change_info=True, 
+                    post_messages=True, 
+                    edit_messages=True,
+                    delete_messages=True, 
+                    invite_users=True,
+                    add_admins=True, 
+                    manage_call=True
                 )
             else:
-                # Only Supergroups support anonymous admins. Basic groups do not!
-                can_be_anonymous = True if is_megagroup else False
-                
-                # Safe permissions specifically for Groups/Supergroups 
+                # Safe permissions specifically for Groups/Supergroups
+                # OMITTED: post_messages, edit_messages
                 await client.edit_admin(
                     chat_id, user_id,
-                    change_info=True, post_messages=False, edit_messages=False,
-                    delete_messages=True, ban_users=True, invite_users=True,
-                    pin_messages=True, add_admins=True, manage_call=True, 
-                    anonymous=can_be_anonymous, # <-- Safely applied!
-                    other=True # <-- CRITICAL: Telegram requires this to allow anonymity!
+                    change_info=True, 
+                    delete_messages=True, 
+                    ban_users=True, 
+                    invite_users=True,
+                    pin_messages=True, 
+                    add_admins=True, 
+                    manage_call=True, 
+                    anonymous=True  # Safely applied to groups only
                 )
         else:
             # Demote / Remove admin
