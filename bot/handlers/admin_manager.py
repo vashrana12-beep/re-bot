@@ -3,44 +3,48 @@ from telethon import events
 from bot.database import chats
 from bot.access_control import requires_role
 
-# Helper to apply full permissions safely based on Chat Type
+# This perfectly mimics your Pyrogram get_safe_privileges logic!
 async def set_admin_rights(client, chat_id, user_id, make_admin=True):
     try:
         if not make_admin:
-            # Revokes admin privileges completely
+            # Revokes admin privileges completely (like NO_PERMISSIONS)
             await client.edit_admin(chat_id, user_id, is_admin=False)
             return True, None
 
-        # Fetch the chat to see if it's a Channel or a Group
+        # Fetch the chat entity to check if it is a Channel or a Group
         chat_entity = await client.get_entity(chat_id)
         
-        # In Telethon, 'broadcast' is True for Channels, False for Groups/Supergroups
+        # 'broadcast' is True for Channels, False for Groups
         is_channel = getattr(chat_entity, 'broadcast', False)
 
         if is_channel:
-            # --- CHANNEL SPECIFIC RIGHTS ---
+            # --- CHANNEL LOGIC ---
+            # Matches Pyrogram's: post_messages, edit_messages, delete_messages, etc.
+            # NO anonymous, NO ban_users, NO pin_messages
             await client.edit_admin(
                 chat_id, user_id,
                 change_info=True, 
-                post_messages=True,   # Channel only
-                edit_messages=True,   # Channel only
+                post_messages=True, 
+                edit_messages=True,
                 delete_messages=True, 
                 invite_users=True,
                 add_admins=True, 
                 manage_call=True
             )
         else:
-            # --- GROUP/SUPERGROUP SPECIFIC RIGHTS ---
+            # --- GROUP LOGIC ---
+            # Matches Pyrogram's: delete_messages, restrict_members, pin_messages, anonymous=True
+            # NO post_messages, NO edit_messages
             await client.edit_admin(
                 chat_id, user_id,
                 change_info=True, 
                 delete_messages=True, 
-                ban_users=True,       # Group only
+                ban_users=True,       # This is restrict_members
                 invite_users=True,
-                pin_messages=True,    # Group only
+                pin_messages=True, 
                 add_admins=True, 
                 manage_call=True,
-                anonymous=True       # Set to True if you want hidden admins in groups!
+                anonymous=True        # Anonymous is now safely set to True for Groups only!
             )
             
         return True, None
@@ -71,7 +75,6 @@ async def admin_manager_handler(event):
     if not target_user_id:
         return await event.respond("❌ Please provide a User ID, username, or reply to a forwarded message.")
 
-    # Prevent editing yourself
     if target_user_id == event.sender_id:
         return await event.respond("⚠️ You cannot change your own admin status via the bot.")
 
@@ -95,14 +98,13 @@ async def admin_manager_handler(event):
                 success_count = 0
                 fail_count = 0
                 
-                # Pull all chats from your existing MongoDB database
                 async for chat_doc in chats.find():
                     success, error = await set_admin_rights(event.client, chat_doc["chat_id"], target_user_id, is_promoting)
                     if success:
                         success_count += 1
                     else:
                         fail_count += 1
-                    await asyncio.sleep(1) # Prevent FloodWaits during global broadcast
+                    await asyncio.sleep(1) # Prevent FloodWaits
                 
                 word = "Promoted" if is_promoting else "Demoted"
                 await status_msg.edit(f"🌍 **Global Broadcast Complete!**\n✅ {word} in {success_count} chats.\n❌ Failed in {fail_count} chats.")
