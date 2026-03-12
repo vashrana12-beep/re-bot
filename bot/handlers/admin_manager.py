@@ -3,42 +3,50 @@ from telethon import events
 from bot.database import chats
 from bot.access_control import requires_role
 
-# --- Helper function using strict Telethon privileges logic with Smart Fallback ---
+# --- Helper function using DYNAMIC Telethon privileges logic ---
 async def apply_admin_rights(client, chat_id, user_id, action="admin"):
     try:
         if action == "admin":
+            # 1. Fetch the bot's own permissions in this exact chat
+            bot_perms = await client.get_permissions(chat_id, 'me')
+            
+            # 2. Pre-check: Can the bot even add admins here?
+            if not bot_perms.is_admin and not bot_perms.is_creator:
+                return False, "The bot is not an admin in this chat."
+            if not bot_perms.add_admins and not bot_perms.is_creator:
+                return False, "The bot lacks the 'Add New Admins' right."
+
+            # 3. Check if it is a Channel or a Group
             entity = await client.get_entity(chat_id)
             is_channel = getattr(entity, 'broadcast', False)
 
+            # 4. Dynamically build the rights list based ONLY on what the bot possesses!
+            rights = {
+                'change_info': bot_perms.change_info,
+                'delete_messages': bot_perms.delete_messages,
+                'invite_users': bot_perms.invite_users,
+                'add_admins': bot_perms.add_admins,
+                'manage_call': bot_perms.manage_call,
+            }
+
             if is_channel:
-                # Safe permissions specifically for Channels
-                await client.edit_admin(
-                    chat_id, user_id,
-                    change_info=True, post_messages=True, edit_messages=True,
-                    delete_messages=True, invite_users=True,
-                    add_admins=True, manage_call=True
-                )
+                # Add Channel-specific rights (if the bot has them)
+                rights['post_messages'] = bot_perms.post_messages
+                rights['edit_messages'] = bot_perms.edit_messages
             else:
-                # --- SMART FALLBACK FOR GROUPS ---
-                try:
-                    # Attempt 1: Try to make them an Anonymous Admin
-                    await client.edit_admin(
-                        chat_id, user_id,
-                        change_info=True, delete_messages=True, ban_users=True, 
-                        invite_users=True, pin_messages=True, add_admins=True, 
-                        manage_call=True, anonymous=True 
-                    )
-                except Exception:
-                    # Attempt 2: If the bot lacks anonymity power, fallback to Normal Admin
-                    await client.edit_admin(
-                        chat_id, user_id,
-                        change_info=True, delete_messages=True, ban_users=True, 
-                        invite_users=True, pin_messages=True, add_admins=True, 
-                        manage_call=True, anonymous=False 
-                    )
+                # Add Group-specific rights (if the bot has them)
+                rights['ban_users'] = bot_perms.ban_users
+                rights['pin_messages'] = bot_perms.pin_messages
+                # This perfectly handles your Anonymous issue automatically!
+                rights['anonymous'] = bot_perms.anonymous 
+
+            # 5. Apply the custom-built rights!
+            await client.edit_admin(chat_id, user_id, **rights)
+            
         else:
             # Demote / Remove admin
             await client.edit_admin(chat_id, user_id, is_admin=False)
+            
         return True, None
     except Exception as e:
         return False, str(e)
