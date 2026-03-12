@@ -36,5 +36,7 @@ async def help_handler(event):
         "👑 `/deletechat <chat_id>` - Remove chat & automations\n"
         "👑 `/stopall` - Pause all system automations\n"
         "👑 `/backup` - Export DB backup\n"
+        "👑 `/admin <id>` - Promote user to admin in selected chats\n"
+        "👑 `/deadmin <id>` - Remove user's admin rights\n"
     )
     await event.respond(help_text)
