@@ -9,6 +9,9 @@ async def apply_admin_rights(client, chat_id, user_id, action="admin"):
         if action == "admin":
             entity = await client.get_entity(chat_id)
             is_channel = getattr(entity, 'broadcast', False)
+            
+            # Check if it's a Supergroup (megagroup) or just a basic Group
+            is_megagroup = getattr(entity, 'megagroup', False)
 
             if is_channel:
                 # Safe permissions specifically for Channels
@@ -16,15 +19,21 @@ async def apply_admin_rights(client, chat_id, user_id, action="admin"):
                     chat_id, user_id,
                     change_info=True, post_messages=True, edit_messages=True,
                     delete_messages=True, ban_users=False, invite_users=True,
-                    pin_messages=False, add_admins=True, manage_call=True
+                    pin_messages=False, add_admins=True, manage_call=True,
+                    other=True # <-- CRITICAL: Telegram requires this base permission!
                 )
             else:
-                # Safe permissions specifically for Groups/Supergroups (anonymous=True)
+                # Only Supergroups support anonymous admins. Basic groups do not!
+                can_be_anonymous = True if is_megagroup else False
+                
+                # Safe permissions specifically for Groups/Supergroups 
                 await client.edit_admin(
                     chat_id, user_id,
                     change_info=True, post_messages=False, edit_messages=False,
                     delete_messages=True, ban_users=True, invite_users=True,
-                    pin_messages=True, add_admins=True, manage_call=True, anonymous=True
+                    pin_messages=True, add_admins=True, manage_call=True, 
+                    anonymous=can_be_anonymous, # <-- Safely applied!
+                    other=True # <-- CRITICAL: Telegram requires this to allow anonymity!
                 )
         else:
             # Demote / Remove admin
@@ -32,7 +41,6 @@ async def apply_admin_rights(client, chat_id, user_id, action="admin"):
         return True, None
     except Exception as e:
         return False, str(e)
-
 
 @events.register(events.NewMessage(pattern=r'^/(admin|deadmin)(?: (.*))?$', func=lambda e: e.is_private))
 @requires_role("owner")
