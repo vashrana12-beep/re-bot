@@ -6,14 +6,27 @@ from bot.access_control import requires_role
 # Helper to apply full permissions safely via Telethon
 async def set_admin_rights(client, chat_id, user_id, make_admin=True):
     try:
+        # --- NEW: Automatically check if chat is a Channel or Group ---
+        entity = await client.get_entity(chat_id)
+        is_channel = getattr(entity, 'broadcast', False) # Telegram sets 'broadcast' to True for Channels
+
         if make_admin:
-            # Grants full admin privileges (matches your FULL_PERMISSIONS)
-            await client.edit_admin(
-                chat_id, user_id,
-                change_info=True, post_messages=True, edit_messages=True,
-                delete_messages=True, ban_users=True, invite_users=True,
-                pin_messages=True, add_admins=True, manage_call=True
-            )
+            if is_channel:
+                # Grants full admin privileges tailored for Channels
+                await client.edit_admin(
+                    chat_id, user_id,
+                    change_info=True, post_messages=True, edit_messages=True,
+                    delete_messages=True, ban_users=False, invite_users=True,
+                    pin_messages=False, add_admins=True, manage_call=True
+                )
+            else:
+                # Grants full admin privileges tailored for Groups (with anonymous=True)
+                await client.edit_admin(
+                    chat_id, user_id,
+                    change_info=True, post_messages=False, edit_messages=False,
+                    delete_messages=True, ban_users=True, invite_users=True,
+                    pin_messages=True, add_admins=True, manage_call=True, anonymous=True
+                )
         else:
             # Revokes admin privileges completely (matches your NO_PERMISSIONS)
             await client.edit_admin(chat_id, user_id, is_admin=False)
@@ -34,6 +47,10 @@ async def admin_manager_handler(event):
         reply_msg = await event.get_reply_message()
         if reply_msg.forward:
             target_user_id = reply_msg.forward.sender_id
+            
+            # --- NEW: Safety check in case the user's privacy settings hide their forward ID ---
+            if not target_user_id:
+                return await event.respond("❌ Could not extract ID. The user's 'Forwarded Messages' privacy setting is hiding their account.")
         else:
             target_user_id = reply_msg.sender_id
     elif args:
