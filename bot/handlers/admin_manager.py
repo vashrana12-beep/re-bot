@@ -40,7 +40,7 @@ async def set_admin_rights(client, chat_id, user_id, make_admin=True):
                 pin_messages=True,    # Group only
                 add_admins=True, 
                 manage_call=True,
-                anonymous=False       # Set to True if you want hidden admins in groups!
+                anonymous=True       # Set to True if you want hidden admins in groups!
             )
             
         return True, None
