@@ -32,6 +32,7 @@ async def main():
     logger.info("System Ready & Scheduled Jobs Recovered.")
 
     # Register Handlers
+    bot.add_event_handler(admin_manager_handler)
     bot.add_event_handler(start_handler)
     bot.add_event_handler(help_handler)
     bot.add_event_handler(bulk_handler)
