@@ -3,7 +3,7 @@ from telethon import events
 from bot.database import chats
 from bot.access_control import requires_role
 
-# --- Helper function using strict Telethon privileges logic ---
+# --- Helper function using strict Telethon privileges logic with Smart Fallback ---
 async def apply_admin_rights(client, chat_id, user_id, action="admin"):
     try:
         if action == "admin":
@@ -12,31 +12,30 @@ async def apply_admin_rights(client, chat_id, user_id, action="admin"):
 
             if is_channel:
                 # Safe permissions specifically for Channels
-                # OMITTED: ban_users, pin_messages, anonymous
                 await client.edit_admin(
                     chat_id, user_id,
-                    change_info=True, 
-                    post_messages=True, 
-                    edit_messages=True,
-                    delete_messages=True, 
-                    invite_users=True,
-                    add_admins=True, 
-                    manage_call=True
+                    change_info=True, post_messages=True, edit_messages=True,
+                    delete_messages=True, invite_users=True,
+                    add_admins=True, manage_call=True
                 )
             else:
-                # Safe permissions specifically for Groups/Supergroups
-                # OMITTED: post_messages, edit_messages
-                await client.edit_admin(
-                    chat_id, user_id,
-                    change_info=True, 
-                    delete_messages=True, 
-                    ban_users=True, 
-                    invite_users=True,
-                    pin_messages=True, 
-                    add_admins=True, 
-                    manage_call=True, 
-                    anonymous=True  # Safely applied to groups only
-                )
+                # --- SMART FALLBACK FOR GROUPS ---
+                try:
+                    # Attempt 1: Try to make them an Anonymous Admin
+                    await client.edit_admin(
+                        chat_id, user_id,
+                        change_info=True, delete_messages=True, ban_users=True, 
+                        invite_users=True, pin_messages=True, add_admins=True, 
+                        manage_call=True, anonymous=True 
+                    )
+                except Exception:
+                    # Attempt 2: If the bot lacks anonymity power, fallback to Normal Admin
+                    await client.edit_admin(
+                        chat_id, user_id,
+                        change_info=True, delete_messages=True, ban_users=True, 
+                        invite_users=True, pin_messages=True, add_admins=True, 
+                        manage_call=True, anonymous=False 
+                    )
         else:
             # Demote / Remove admin
             await client.edit_admin(chat_id, user_id, is_admin=False)
