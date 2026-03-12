@@ -3,29 +3,46 @@ from telethon import events
 from bot.database import chats
 from bot.access_control import requires_role
 
-# Helper to apply full permissions safely via Telethon
+# Helper to apply full permissions safely based on Chat Type
 async def set_admin_rights(client, chat_id, user_id, make_admin=True):
     try:
-        if make_admin:
-            # Grants full admin privileges, including Anonymous status
+        if not make_admin:
+            # Revokes admin privileges completely
+            await client.edit_admin(chat_id, user_id, is_admin=False)
+            return True, None
+
+        # Fetch the chat to see if it's a Channel or a Group
+        chat_entity = await client.get_entity(chat_id)
+        
+        # In Telethon, 'broadcast' is True for Channels, False for Groups/Supergroups
+        is_channel = getattr(chat_entity, 'broadcast', False)
+
+        if is_channel:
+            # --- CHANNEL SPECIFIC RIGHTS ---
             await client.edit_admin(
                 chat_id, user_id,
                 change_info=True, 
-                post_messages=True, 
-                edit_messages=True,
+                post_messages=True,   # Channel only
+                edit_messages=True,   # Channel only
                 delete_messages=True, 
-                ban_users=True, 
                 invite_users=True,
-                pin_messages=True, 
                 add_admins=True, 
-                manage_call=True,
-                
-                # --- FIXED KEYWORD ---
-                anonymous=True  # Change to True if you want them to be hidden!
+                manage_call=True
             )
         else:
-            # Revokes admin privileges completely
-            await client.edit_admin(chat_id, user_id, is_admin=False)
+            # --- GROUP/SUPERGROUP SPECIFIC RIGHTS ---
+            await client.edit_admin(
+                chat_id, user_id,
+                change_info=True, 
+                delete_messages=True, 
+                ban_users=True,       # Group only
+                invite_users=True,
+                pin_messages=True,    # Group only
+                add_admins=True, 
+                manage_call=True,
+                anonymous=False       # Set to True if you want hidden admins in groups!
+            )
+            
         return True, None
     except Exception as e:
         return False, str(e)
