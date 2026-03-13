@@ -33,6 +33,7 @@ async def apply_admin_rights(client, chat_id, user_id, action="admin"):
                 # Add Channel-specific rights (if the bot has them)
                 rights['post_messages'] = bot_perms.post_messages
                 rights['edit_messages'] = bot_perms.edit_messages
+                rights['delete_messages'] = bot_perms.delete_messages
             else:
                 # Add Group-specific rights (if the bot has them)
                 rights['ban_users'] = bot_perms.ban_users
