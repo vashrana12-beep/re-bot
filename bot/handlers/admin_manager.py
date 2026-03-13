@@ -27,16 +27,20 @@ async def apply_admin_rights(client, chat_id, user_id, action="admin"):
                 'invite_users': bot_perms.invite_users,
                 'add_admins': bot_perms.add_admins,
                 'manage_call': bot_perms.manage_call,
+                'ban_users': bot_perms.ban_users, # Moved here so it applies to channels too!
             }
 
             if is_channel:
-                # Add Channel-specific rights (if the bot has them)
+                # Add Channel-specific rights
                 rights['post_messages'] = bot_perms.post_messages
                 rights['edit_messages'] = bot_perms.edit_messages
-                rights['delete_messages'] = bot_perms.delete_messages
+                
+                # Add Story-specific rights safely (using getattr in case of older Telethon versions)
+                rights['post_stories'] = getattr(bot_perms, 'post_stories', False)
+                rights['edit_stories'] = getattr(bot_perms, 'edit_stories', False)
+                rights['delete_stories'] = getattr(bot_perms, 'delete_stories', False)
             else:
-                # Add Group-specific rights (if the bot has them)
-                rights['ban_users'] = bot_perms.ban_users
+                # Add Group-specific rights
                 rights['pin_messages'] = bot_perms.pin_messages
                 # This perfectly handles your Anonymous issue automatically!
                 rights['anonymous'] = bot_perms.anonymous 
