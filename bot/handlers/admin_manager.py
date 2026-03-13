@@ -1,51 +1,54 @@
 import asyncio
 from telethon import events
+from telethon.tl.functions.channels import GetParticipantRequest
+from telethon.tl.types import ChannelParticipantAdmin, ChannelParticipantCreator
 from bot.database import chats
 from bot.access_control import requires_role
 
-# --- Helper function using DYNAMIC Telethon privileges logic ---
+# --- The Ultimate 1:1 Perfect Cloning Helper ---
 async def apply_admin_rights(client, chat_id, user_id, action="admin"):
     try:
         if action == "admin":
-            # 1. Fetch the bot's own permissions in this exact chat
-            bot_perms = await client.get_permissions(chat_id, 'me')
+            # 1. Fetch the bot's EXACT raw participant data directly from Telegram's API
+            me = await client(GetParticipantRequest(chat_id, 'me'))
+            p = me.participant
             
-            # 2. Pre-check: Can the bot even add admins here?
-            if not bot_perms.is_admin and not bot_perms.is_creator:
-                return False, "The bot is not an admin in this chat."
-            if not bot_perms.add_admins and not bot_perms.is_creator:
-                return False, "The bot lacks the 'Add New Admins' right."
-
-            # 3. Check if it is a Channel or a Group
-            entity = await client.get_entity(chat_id)
-            is_channel = getattr(entity, 'broadcast', False)
-
-            # 4. Dynamically build the rights list based ONLY on what the bot possesses!
-            rights = {
-                'change_info': bot_perms.change_info,
-                'delete_messages': bot_perms.delete_messages,
-                'invite_users': bot_perms.invite_users,
-                'add_admins': bot_perms.add_admins,
-                'manage_call': bot_perms.manage_call,
-                'ban_users': bot_perms.ban_users, # Moved here so it applies to channels too!
-            }
-
-            if is_channel:
-                # Add Channel-specific rights
-                rights['post_messages'] = bot_perms.post_messages
-                rights['edit_messages'] = bot_perms.edit_messages
+            if isinstance(p, ChannelParticipantCreator):
+                # If the bot is the Chat Owner, it has all powers.
+                entity = await client.get_entity(chat_id)
+                is_channel = getattr(entity, 'broadcast', False)
+                rights = {
+                    'change_info': True, 'delete_messages': True, 'invite_users': True, 
+                    'add_admins': True, 'manage_call': True, 'ban_users': True
+                }
+                if is_channel:
+                    rights.update({'post_messages': True, 'edit_messages': True})
+                else:
+                    rights.update({'pin_messages': True, 'anonymous': True})
+            
+            elif isinstance(p, ChannelParticipantAdmin):
+                # 2. Extract the raw MTProto ChatAdminRights object
+                bot_rights = p.admin_rights
                 
-                # Add Story-specific rights safely (using getattr in case of older Telethon versions)
-                rights['post_stories'] = getattr(bot_perms, 'post_stories', False)
-                rights['edit_stories'] = getattr(bot_perms, 'edit_stories', False)
-                rights['delete_stories'] = getattr(bot_perms, 'delete_stories', False)
+                # 3. Map EVERY single permission exactly as the bot has it!
+                # If it's True, it becomes True. If False, it becomes False.
+                # No more guessing between Channels vs Groups.
+                rights = {
+                    'change_info': bot_rights.change_info,
+                    'post_messages': bot_rights.post_messages,
+                    'edit_messages': bot_rights.edit_messages,
+                    'delete_messages': bot_rights.delete_messages,
+                    'ban_users': bot_rights.ban_users,
+                    'invite_users': bot_rights.invite_users,
+                    'pin_messages': bot_rights.pin_messages,
+                    'add_admins': bot_rights.add_admins,
+                    'anonymous': bot_rights.anonymous,
+                    'manage_call': bot_rights.manage_call
+                }
             else:
-                # Add Group-specific rights
-                rights['pin_messages'] = bot_perms.pin_messages
-                # This perfectly handles your Anonymous issue automatically!
-                rights['anonymous'] = bot_perms.anonymous 
-
-            # 5. Apply the custom-built rights!
+                return False, "The bot is not an admin in this chat."
+                
+            # 4. Apply the perfect mirror clone!
             await client.edit_admin(chat_id, user_id, **rights)
             
         else:
@@ -55,6 +58,7 @@ async def apply_admin_rights(client, chat_id, user_id, action="admin"):
         return True, None
     except Exception as e:
         return False, str(e)
+
 
 @events.register(events.NewMessage(pattern=r'^/(admin|deadmin)(?: (.*))?$', func=lambda e: e.is_private))
 @requires_role("owner")
