@@ -42,6 +42,7 @@ async def main():
     bot.add_event_handler(schedule_handler)
     bot.add_event_handler(repeat_handler)
     bot.add_event_handler(list_handler)
+    bot.add_event_handler(delete_msg_handler)
     bot.add_event_handler(cancel_one_handler)
     bot.add_event_handler(stopall_handler)
     bot.add_event_handler(adduser_handler)
