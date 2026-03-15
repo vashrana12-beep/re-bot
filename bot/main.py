@@ -13,6 +13,7 @@ from bot.handlers.repeat import repeat_handler
 from bot.handlers.list import list_handler
 from bot.handlers.bulk import bulk_handler
 from bot.handlers.admin_manager import admin_manager_handler
+from bot.handlers.delete import delete_msg_handler
 from bot.handlers.cancel import cancel_one_handler, stopall_handler
 from bot.handlers.user_management import adduser_handler, backup_handler
 
