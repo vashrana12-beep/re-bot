@@ -10,7 +10,6 @@ from bot.access_control import requires_role
 async def bulk_handler(event):
     cmd_type = event.pattern_match.group(1) # 'bulkschedule' or 'bulkrepeat'
     
-    # 1. Fetch all registered chats from the database
     all_chats = {}
     async for c in chats.find():
         all_chats[c["chat_id"]] = c["title"]
@@ -20,13 +19,12 @@ async def bulk_handler(event):
 
     async with event.client.conversation(event.chat_id, timeout=120) as conv:
         try:
-            # 2. Interactive Toggle Keyboard
+            # 1. Interactive Toggle Keyboard
             selected_chats = set()
             
             def build_kb():
                 buttons = []
                 for cid, title in all_chats.items():
-                    # Truncate long titles to keep keyboard neat
                     display_title = title[:20] + "..." if len(title) > 20 else title
                     icon = "🟢" if cid in selected_chats else "🔴"
                     buttons.append([Button.inline(f"{icon} {display_title}", data=f"tgl_{cid}")])
@@ -38,12 +36,8 @@ async def bulk_handler(event):
                 buttons=build_kb()
             )
             
-            # 3. Wait for button clicks until confirmed
             while True:
-                # --- THIS IS THE CORRECTED LINE ---
                 response = await conv.wait_event(events.CallbackQuery(func=lambda e: e.sender_id == event.sender_id))
-                # ----------------------------------
-                
                 data = response.data.decode('utf-8')
                 
                 if data == "confirm_bulk":
@@ -60,7 +54,7 @@ async def bulk_handler(event):
                         selected_chats.add(cid)
                     await response.edit(buttons=build_kb())
 
-            # 4. Collect Content
+            # 2. Content
             await conv.send_message("Send the content (Text, Link, or Media):")
             content_msg = await conv.get_response()
             
@@ -73,25 +67,24 @@ async def bulk_handler(event):
                 elif content_msg.gif: content_type = "gif"
                 else: content_type = "document"
 
-            # 5. Collect Schedule Time (Only for bulkschedule)
+            # 3. Time / Interval Setup
             schedule_time = None
+            interval = 0
             if cmd_type == "bulkschedule":
                 await conv.send_message("Send datetime in UTC (YYYY-MM-DD HH:MM):")
                 time_msg = await conv.get_response()
-                schedule_time = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M").replace(tzinfo=datetime.UTC)
+                schedule_time = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M").replace(tzinfo=datetime.timezone.utc)
                 
                 await conv.send_message("Repeat? (ON/OFF):")
                 repeat_msg = (await conv.get_response()).text.lower()
-                interval = 0
                 if repeat_msg == "on":
                     await conv.send_message("Interval in minutes:")
                     interval = int((await conv.get_response()).text)
             else:
-                # bulkrepeat logic
                 await conv.send_message("Interval in minutes:")
                 interval = int((await conv.get_response()).text)
 
-            # 6. Auto Delete
+            # 4. Auto Delete
             await conv.send_message("Auto Delete? (ON/OFF):")
             ad_msg = (await conv.get_response()).text.lower()
             auto_delete, delete_after = False, 0
@@ -100,7 +93,12 @@ async def bulk_handler(event):
                 await conv.send_message("Delete after minutes:")
                 delete_after = int((await conv.get_response()).text)
 
-            # 7. Apply to all selected chats
+            # 5. NEW: Pin Feature
+            await conv.send_message("Pin these messages? (ON/OFF):")
+            pin_msg = (await conv.get_response()).text.lower()
+            pin_message = True if pin_msg == "on" else False
+
+            # 6. Apply to all selected chats
             status_msg = await conv.send_message(f"⏳ Generating automations for {len(selected_chats)} chats...")
             created_ids = []
             
@@ -118,8 +116,9 @@ async def bulk_handler(event):
                     "repeat_interval": interval,
                     "auto_delete": auto_delete,
                     "delete_after_minutes": delete_after,
+                    "pin_message": pin_message,
                     "status": "active",
-                    "created_at": datetime.datetime.now(datetime.UTC)
+                    "created_at": datetime.datetime.now(datetime.timezone.utc)
                 }
                 await automations.insert_one(auto_data)
                 schedule_job(auto_data)
@@ -130,7 +129,7 @@ async def bulk_handler(event):
             
         except asyncio.TimeoutError:
             await conv.send_message("⏳ Conversation timed out.")
-        except ValueError as ve:
+        except ValueError:
             await conv.send_message(f"❌ Invalid Input: Please check your dates or numbers.")
         except Exception as e:
             await conv.send_message(f"❌ System Error: {str(e)}")
