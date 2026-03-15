@@ -29,6 +29,14 @@ async def execute_automation(automation_id: int):
                 caption=auto.get("caption", "")
             )
         
+        # --- NEW PIN FEATURE EXECUTION ---
+        if auto.get("pin_message"):
+            try:
+                await bot_client.pin_message(auto["chat_id"], msg.id)
+            except Exception as e:
+                logger.error(f"Failed to pin message in {auto['chat_id']}: {e}")
+        # ---------------------------------
+
         if auto.get("auto_delete"):
             # Ensure this is also safely timezone-aware
             run_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=auto["delete_after_minutes"])
@@ -54,15 +62,11 @@ def schedule_job(auto_data: dict):
         return
 
     # ---- CRITICAL TIMEZONE FIX ----
-    # 1. Safely extract the schedule time
     sched_time = auto_data.get("schedule_time")
-    
-    # 2. If it exists but has no timezone (naive), force it to be UTC
     if sched_time is not None:
         if sched_time.tzinfo is None:
             sched_time = sched_time.replace(tzinfo=datetime.timezone.utc)
             
-    # 3. Create a strict, timezone-aware "now" for comparison
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     # -------------------------------
 
@@ -73,7 +77,6 @@ def schedule_job(auto_data: dict):
                 start_date=sched_time, id=job_id, args=[auto_data["automation_id"]]
             )
         else:
-            # Compare aware to aware
             if sched_time > now_utc:
                 scheduler.add_job(
                     execute_automation, 'date', run_date=sched_time,
