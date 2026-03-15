@@ -24,6 +24,7 @@ async def help_handler(event):
         "🚀 `/bulkschedule` - Schedule a post across multiple chats at once\n"
         "🚀 `/bulkrepeat` - Set a repeating post across multiple chats at once\n"
         "🔹 `/cancel <id>` - Cancel a specific automation\n"
+        "🔹 `/delete <link> <end_id>` - Delete specific messages or ranges\n"
         "🔹 `/pause <id>` - Pause an automation\n"
         "🔹 `/resume <id>` - Resume an automation\n\n"
         "**Viewer Commands:**\n"
