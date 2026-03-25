@@ -1,9 +1,12 @@
 import datetime
 import asyncio
+from zoneinfo import ZoneInfo
 from telethon import events, Button
 from bot.database import automations, get_next_sequence, chats
 from bot.scheduler import schedule_job
 from bot.access_control import requires_role
+
+LOCAL_TZ = ZoneInfo("Asia/Kolkata")
 
 @events.register(events.NewMessage(pattern=r'^/(bulkschedule|bulkrepeat)$', func=lambda e: e.is_private))
 @requires_role("admin")
@@ -71,9 +74,21 @@ async def bulk_handler(event):
             schedule_time = None
             interval = 0
             if cmd_type == "bulkschedule":
-                await conv.send_message("Send datetime in UTC (YYYY-MM-DD HH:MM):")
+                # --- NEW: AUTOMATIC LOCAL TIME CONVERSION ---
+                await conv.send_message("Send datetime in YOUR LOCAL TIME (YYYY-MM-DD HH:MM):")
                 time_msg = await conv.get_response()
-                schedule_time = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M").replace(tzinfo=datetime.timezone.utc)
+                
+                local_dt = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M")
+                aware_local_dt = local_dt.replace(tzinfo=LOCAL_TZ)
+                schedule_time = aware_local_dt.astimezone(datetime.timezone.utc)
+                
+                if schedule_time <= datetime.datetime.now(datetime.timezone.utc):
+                    return await conv.send_message(
+                        "❌ **Time Error!**\n"
+                        "The time you entered has already passed.\n"
+                        "Please enter a valid future time."
+                    )
+                # --------------------------------------------
                 
                 await conv.send_message("Repeat? (ON/OFF):")
                 repeat_msg = (await conv.get_response()).text.lower()
@@ -93,7 +108,7 @@ async def bulk_handler(event):
                 await conv.send_message("Delete after minutes:")
                 delete_after = int((await conv.get_response()).text)
 
-            # 5. NEW: Pin Feature
+            # 5. Pin Feature
             await conv.send_message("Pin these messages? (ON/OFF):")
             pin_msg = (await conv.get_response()).text.lower()
             pin_message = True if pin_msg == "on" else False
