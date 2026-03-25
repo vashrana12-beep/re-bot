@@ -1,5 +1,5 @@
-import datetime
 import asyncio
+import datetime
 from zoneinfo import ZoneInfo
 from telethon import events, Button
 from bot.database import automations, get_next_sequence, chats
@@ -8,115 +8,124 @@ from bot.access_control import requires_role
 
 LOCAL_TZ = ZoneInfo("Asia/Kolkata")
 
-@events.register(events.NewMessage(pattern=r'^/(bulkschedule|bulkrepeat)$', func=lambda e: e.is_private))
+
+def _parse_positive_int(raw_value: str, label: str) -> int:
+    value = int(raw_value.strip())
+    if value <= 0:
+        raise ValueError(f"{label} must be greater than 0.")
+    return value
+
+
+@events.register(events.NewMessage(pattern=r"^/(bulkschedule|bulkrepeat)$", func=lambda e: e.is_private))
 @requires_role("admin")
 async def bulk_handler(event):
-    cmd_type = event.pattern_match.group(1) # 'bulkschedule' or 'bulkrepeat'
-    
+    cmd_type = event.pattern_match.group(1)
+
     all_chats = {}
-    async for c in chats.find():
-        all_chats[c["chat_id"]] = c["title"]
-        
+    async for chat in chats.find():
+        all_chats[chat["chat_id"]] = chat["title"]
+
     if not all_chats:
-        return await event.respond("❌ No chats registered. Use /detect first.")
+        return await event.respond("No chats registered. Use /detect first.")
 
     async with event.client.conversation(event.chat_id, timeout=120) as conv:
         try:
-            # 1. Interactive Toggle Keyboard
             selected_chats = set()
-            
+
             def build_kb():
                 buttons = []
-                for cid, title in all_chats.items():
+                for chat_id, title in all_chats.items():
                     display_title = title[:20] + "..." if len(title) > 20 else title
-                    icon = "🟢" if cid in selected_chats else "🔴"
-                    buttons.append([Button.inline(f"{icon} {display_title}", data=f"tgl_{cid}")])
-                buttons.append([Button.inline("✅ Confirm Selection", data="confirm_bulk")])
+                    icon = "[x]" if chat_id in selected_chats else "[ ]"
+                    buttons.append([Button.inline(f"{icon} {display_title}", data=f"tgl_{chat_id}")])
+                buttons.append([Button.inline("Confirm Selection", data="confirm_bulk")])
                 return buttons
-            
-            msg = await conv.send_message(
-                f"**Bulk {cmd_type.replace('bulk', '').capitalize()} Setup**\nSelect target chats:", 
-                buttons=build_kb()
+
+            await conv.send_message(
+                f"Bulk {cmd_type.replace('bulk', '').capitalize()} Setup\nSelect target chats:",
+                buttons=build_kb(),
             )
-            
+
             while True:
-                response = await conv.wait_event(events.CallbackQuery(func=lambda e: e.sender_id == event.sender_id))
-                data = response.data.decode('utf-8')
-                
+                response = await conv.wait_event(
+                    events.CallbackQuery(func=lambda e: e.sender_id == event.sender_id)
+                )
+                data = response.data.decode("utf-8")
+
                 if data == "confirm_bulk":
                     if not selected_chats:
-                        await response.answer("Select at least one chat!", alert=True)
+                        await response.answer("Select at least one chat.", alert=True)
                         continue
-                    await response.edit(f"✅ Selected {len(selected_chats)} chats.", buttons=None)
+                    await response.edit(f"Selected {len(selected_chats)} chats.", buttons=None)
                     break
-                elif data.startswith("tgl_"):
-                    cid = int(data.split("_")[1])
-                    if cid in selected_chats:
-                        selected_chats.remove(cid)
+
+                if data.startswith("tgl_"):
+                    chat_id = int(data.split("_", 1)[1])
+                    if chat_id in selected_chats:
+                        selected_chats.remove(chat_id)
                     else:
-                        selected_chats.add(cid)
+                        selected_chats.add(chat_id)
                     await response.edit(buttons=build_kb())
 
-            # 2. Content
             await conv.send_message("Send the content (Text, Link, or Media):")
             content_msg = await conv.get_response()
-            
+
             content_type, content, caption = "text", content_msg.text, ""
-            if content_msg.media and hasattr(content_msg, 'file') and content_msg.file:
+            if content_msg.media and hasattr(content_msg, "file") and content_msg.file:
                 content = content_msg.file.id
                 caption = content_msg.text or ""
-                if content_msg.photo: content_type = "photo"
-                elif content_msg.video: content_type = "video"
-                elif content_msg.gif: content_type = "gif"
-                else: content_type = "document"
+                if content_msg.photo:
+                    content_type = "photo"
+                elif content_msg.video:
+                    content_type = "video"
+                elif content_msg.gif:
+                    content_type = "gif"
+                else:
+                    content_type = "document"
 
-            # 3. Time / Interval Setup
             schedule_time = None
             interval = 0
             if cmd_type == "bulkschedule":
-                # --- NEW: AUTOMATIC LOCAL TIME CONVERSION ---
                 await conv.send_message("Send datetime in YOUR LOCAL TIME (YYYY-MM-DD HH:MM):")
                 time_msg = await conv.get_response()
-                
-                local_dt = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M")
+
+                local_dt = datetime.datetime.strptime(time_msg.text.strip(), "%Y-%m-%d %H:%M")
                 aware_local_dt = local_dt.replace(tzinfo=LOCAL_TZ)
                 schedule_time = aware_local_dt.astimezone(datetime.timezone.utc)
-                
+
                 if schedule_time <= datetime.datetime.now(datetime.timezone.utc):
                     return await conv.send_message(
-                        "❌ **Time Error!**\n"
+                        "Time Error!\n"
                         "The time you entered has already passed.\n"
                         "Please enter a valid future time."
                     )
-                # --------------------------------------------
-                
+
                 await conv.send_message("Repeat? (ON/OFF):")
-                repeat_msg = (await conv.get_response()).text.lower()
+                repeat_msg = (await conv.get_response()).text.strip().lower()
                 if repeat_msg == "on":
                     await conv.send_message("Interval in minutes:")
-                    interval = int((await conv.get_response()).text)
+                    interval = _parse_positive_int((await conv.get_response()).text, "Interval")
             else:
                 await conv.send_message("Interval in minutes:")
-                interval = int((await conv.get_response()).text)
+                interval = _parse_positive_int((await conv.get_response()).text, "Interval")
 
-            # 4. Auto Delete
             await conv.send_message("Auto Delete? (ON/OFF):")
-            ad_msg = (await conv.get_response()).text.lower()
+            ad_msg = (await conv.get_response()).text.strip().lower()
             auto_delete, delete_after = False, 0
             if ad_msg == "on":
                 auto_delete = True
                 await conv.send_message("Delete after minutes:")
-                delete_after = int((await conv.get_response()).text)
+                delete_after = _parse_positive_int((await conv.get_response()).text, "Delete-after time")
 
-            # 5. Pin Feature
             await conv.send_message("Pin these messages? (ON/OFF):")
-            pin_msg = (await conv.get_response()).text.lower()
-            pin_message = True if pin_msg == "on" else False
+            pin_msg = (await conv.get_response()).text.strip().lower()
+            pin_message = pin_msg == "on"
 
-            # 6. Apply to all selected chats
-            status_msg = await conv.send_message(f"⏳ Generating automations for {len(selected_chats)} chats...")
+            status_msg = await conv.send_message(
+                f"Creating automations for {len(selected_chats)} chats..."
+            )
             created_ids = []
-            
+
             for chat_id in selected_chats:
                 auto_id = await get_next_sequence("automation_id")
                 auto_data = {
@@ -133,18 +142,21 @@ async def bulk_handler(event):
                     "delete_after_minutes": delete_after,
                     "pin_message": pin_message,
                     "status": "active",
-                    "created_at": datetime.datetime.now(datetime.timezone.utc)
+                    "created_at": datetime.datetime.now(datetime.timezone.utc),
                 }
                 await automations.insert_one(auto_data)
                 schedule_job(auto_data)
                 created_ids.append(str(auto_id))
-            
+
             id_list = ", ".join(created_ids)
-            await status_msg.edit(f"✅ **Bulk Setup Complete!**\nApplied to {len(selected_chats)} chats.\nAutomation IDs: `{id_list}`")
-            
+            await status_msg.edit(
+                f"Bulk setup complete.\nApplied to {len(selected_chats)} chats.\nAutomation IDs: `{id_list}`"
+            )
+
         except asyncio.TimeoutError:
-            await conv.send_message("⏳ Conversation timed out.")
-        except ValueError:
-            await conv.send_message(f"❌ Invalid Input: Please check your dates or numbers.")
+            await conv.send_message("Conversation timed out.")
+        except ValueError as e:
+            error_message = str(e) or "Invalid input. Check your dates and numbers."
+            await conv.send_message(error_message)
         except Exception as e:
-            await conv.send_message(f"❌ System Error: {str(e)}")
+            await conv.send_message(f"System error: {str(e)}")
