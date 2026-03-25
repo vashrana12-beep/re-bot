@@ -1,9 +1,13 @@
 import asyncio
 import datetime
+from zoneinfo import ZoneInfo
 from telethon import events
 from bot.database import automations, get_next_sequence, chats
 from bot.scheduler import schedule_job
 from bot.access_control import requires_role
+
+# Set your local timezone here!
+LOCAL_TZ = ZoneInfo("Asia/Kolkata") 
 
 @events.register(events.NewMessage(pattern=r'^/(schedule|repeat)$', func=lambda e: e.is_private))
 @requires_role("admin")
@@ -38,21 +42,27 @@ async def schedule_handler(event):
             interval = 0
             
             if cmd_type == "schedule":
-                await conv.send_message("Send datetime in UTC (YYYY-MM-DD HH:MM):")
+                # --- NEW: AUTOMATIC LOCAL TIME CONVERSION ---
+                await conv.send_message("Send datetime in YOUR LOCAL TIME (YYYY-MM-DD HH:MM):")
                 time_msg = await conv.get_response()
-                schedule_time = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M").replace(tzinfo=datetime.timezone.utc)
                 
-                # --- NEW: PREVENT SILENT PAST TIME FAILURES ---
+                # Parse the time exactly as you typed it
+                local_dt = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M")
+                
+                # Attach your local timezone (IST) to it
+                aware_local_dt = local_dt.replace(tzinfo=LOCAL_TZ)
+                
+                # Convert it directly to UTC for the database
+                schedule_time = aware_local_dt.astimezone(datetime.timezone.utc)
+                
+                # Prevent silent failures for past times
                 if schedule_time <= datetime.datetime.now(datetime.timezone.utc):
                     return await conv.send_message(
-                        "❌ **Time Travel Error!**\n"
-                        "The time you entered has already passed in UTC.\n"
-                        "Please convert your local time to UTC correctly and start over."
+                        "❌ **Time Error!**\n"
+                        "The time you entered has already passed.\n"
+                        "Please enter a valid future time."
                     )
-                # ----------------------------------------------
-                
-                await conv.send_message("Repeat? (ON/OFF):")
-                repeat_msg = (await conv.get_response()).text.lower()
+                # --------------------------------------------
                 
                 await conv.send_message("Repeat? (ON/OFF):")
                 repeat_msg = (await conv.get_response()).text.lower()
@@ -73,7 +83,7 @@ async def schedule_handler(event):
                 await conv.send_message("Delete after minutes:")
                 delete_after = int((await conv.get_response()).text)
 
-            # 5. NEW: Pin Feature
+            # 5. Pin Feature
             await conv.send_message("Pin this message? (ON/OFF):")
             pin_msg = (await conv.get_response()).text.lower()
             pin_message = True if pin_msg == "on" else False
