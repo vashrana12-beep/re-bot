@@ -36,9 +36,9 @@ async def bulk_handler(event):
                 buttons = []
                 for chat_id, title in all_chats.items():
                     display_title = title[:20] + "..." if len(title) > 20 else title
-                    icon = "[x]" if chat_id in selected_chats else "[ ]"
+                    icon = "🟢" if chat_id in selected_chats else "🔴"
                     buttons.append([Button.inline(f"{icon} {display_title}", data=f"tgl_{chat_id}")])
-                buttons.append([Button.inline("Confirm Selection", data="confirm_bulk")])
+                buttons.append([Button.inline("✅ Confirm Selection", data="confirm_bulk")])
                 return buttons
 
             await conv.send_message(
