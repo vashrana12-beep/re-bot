@@ -42,6 +42,18 @@ async def schedule_handler(event):
                 time_msg = await conv.get_response()
                 schedule_time = datetime.datetime.strptime(time_msg.text, "%Y-%m-%d %H:%M").replace(tzinfo=datetime.timezone.utc)
                 
+                # --- NEW: PREVENT SILENT PAST TIME FAILURES ---
+                if schedule_time <= datetime.datetime.now(datetime.timezone.utc):
+                    return await conv.send_message(
+                        "❌ **Time Travel Error!**\n"
+                        "The time you entered has already passed in UTC.\n"
+                        "Please convert your local time to UTC correctly and start over."
+                    )
+                # ----------------------------------------------
+                
+                await conv.send_message("Repeat? (ON/OFF):")
+                repeat_msg = (await conv.get_response()).text.lower()
+                
                 await conv.send_message("Repeat? (ON/OFF):")
                 repeat_msg = (await conv.get_response()).text.lower()
                 if repeat_msg == "on":
