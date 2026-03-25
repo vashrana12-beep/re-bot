@@ -45,11 +45,19 @@ async def execute_automation(automation_id: int):
                 args=[auto["chat_id"], msg.id]
             )
             
+        # --- NEW: MARK ONE-OFF JOBS AS COMPLETED ---
+        if auto["type"] == "schedule" and not auto.get("repeat_interval"):
+            await automations.update_one(
+                {"automation_id": automation_id}, 
+                {"$set": {"status": "completed"}}
+            )
+        # -------------------------------------------
+            
     except FloodWaitError as e:
         logger.warning(f"Flood wait {e.seconds}s. Pausing execution.")
         await asyncio.sleep(e.seconds)
     except Exception as e:
-        logger.error(f"Error executing automation {automation_id}: {e}")
+        logger.error(f"Error executing automation {automation_id}: {e}") 
 
 async def load_recovery_jobs():
     cursor = automations.find({"status": "active"})
