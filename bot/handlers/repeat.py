@@ -18,11 +18,39 @@ def _parse_positive_int(raw_value: str, label: str) -> int:
 async def repeat_handler(event):
     async with event.client.conversation(event.chat_id, timeout=60) as conv:
         try:
-            await conv.send_message("Send the Target Chat ID:")
-            chat_id = int((await conv.get_response()).text)
+            all_chats_list = []
+            async for chat in chats.find():
+                all_chats_list.append((chat["chat_id"], chat["title"]))
 
-            if not await chats.find_one({"chat_id": chat_id}):
-                return await conv.send_message("Chat not registered. Use /detect first.")
+            if not all_chats_list:
+                return await event.respond("No chats registered. Use /detect first.")
+
+            page = 0
+            def build_kb():
+                from bot.utils.keyboard import build_chat_keyboard
+                return build_chat_keyboard(all_chats_list, set(), page, is_multi=False)
+
+            await conv.send_message("Select Target Chat:", buttons=build_kb())
+            chat_id = None
+
+            while True:
+                response = await conv.wait_event(
+                    events.CallbackQuery(func=lambda e: e.sender_id == event.sender_id)
+                )
+                data = response.data.decode("utf-8")
+
+                if data == "ignore":
+                    await response.answer()
+                    continue
+
+                if data.startswith("page_"):
+                    page = int(data.split("_")[1])
+                    await response.edit(buttons=build_kb())
+
+                elif data.startswith("sel_"):
+                    chat_id = int(data.split("_", 1)[1])
+                    await response.edit(f"Selected Chat ID: `{chat_id}`", buttons=None)
+                    break
 
             await conv.send_message("Send the content (Text, Link, or Media):")
             msg = await conv.get_response()

@@ -21,25 +21,21 @@ def _parse_positive_int(raw_value: str, label: str) -> int:
 async def bulk_handler(event):
     cmd_type = event.pattern_match.group(1)
 
-    all_chats = {}
+    all_chats_list = []
     async for chat in chats.find():
-        all_chats[chat["chat_id"]] = chat["title"]
+        all_chats_list.append((chat["chat_id"], chat["title"]))
 
-    if not all_chats:
+    if not all_chats_list:
         return await event.respond("No chats registered. Use /detect first.")
 
     async with event.client.conversation(event.chat_id, timeout=120) as conv:
         try:
             selected_chats = set()
+            page = 0
 
             def build_kb():
-                buttons = []
-                for chat_id, title in all_chats.items():
-                    display_title = title[:20] + "..." if len(title) > 20 else title
-                    icon = "🟢" if chat_id in selected_chats else "🔴"
-                    buttons.append([Button.inline(f"{icon} {display_title}", data=f"tgl_{chat_id}")])
-                buttons.append([Button.inline("✅ Confirm Selection", data="confirm_bulk")])
-                return buttons
+                from bot.utils.keyboard import build_chat_keyboard
+                return build_chat_keyboard(all_chats_list, selected_chats, page, is_multi=True)
 
             await conv.send_message(
                 f"Bulk {cmd_type.replace('bulk', '').capitalize()} Setup\nSelect target chats:",
@@ -52,20 +48,37 @@ async def bulk_handler(event):
                 )
                 data = response.data.decode("utf-8")
 
-                if data == "confirm_bulk":
+                if data == "ignore":
+                    await response.answer()
+                    continue
+
+                if data.startswith("page_"):
+                    page = int(data.split("_")[1])
+                    await response.edit(buttons=build_kb())
+
+                elif data == "select_all":
+                    selected_chats.update([c[0] for c in all_chats_list])
+                    await response.edit(buttons=build_kb())
+
+                elif data == "deselect_all":
+                    selected_chats.clear()
+                    await response.edit(buttons=build_kb())
+
+                elif data == "confirm_bulk":
                     if not selected_chats:
                         await response.answer("Select at least one chat.", alert=True)
                         continue
                     await response.edit(f"Selected {len(selected_chats)} chats.", buttons=None)
                     break
 
-                if data.startswith("tgl_"):
+                elif data.startswith("tgl_"):
                     chat_id = int(data.split("_", 1)[1])
                     if chat_id in selected_chats:
                         selected_chats.remove(chat_id)
                     else:
                         selected_chats.add(chat_id)
                     await response.edit(buttons=build_kb())
+
 
             await conv.send_message("Send the content (Text, Link, or Media):")
             content_msg = await conv.get_response()
