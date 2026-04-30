@@ -57,11 +57,17 @@ async def bulk_handler(event):
                     await response.edit(buttons=build_kb())
 
                 elif data == "select_all":
-                    selected_chats.update([c[0] for c in all_chats_list])
+                    start = page * 50
+                    end = start + 50
+                    page_chats = [c[0] for c in all_chats_list[start:end]]
+                    selected_chats.update(page_chats)
                     await response.edit(buttons=build_kb())
 
                 elif data == "deselect_all":
-                    selected_chats.clear()
+                    start = page * 50
+                    end = start + 50
+                    page_chats = [c[0] for c in all_chats_list[start:end]]
+                    selected_chats.difference_update(page_chats)
                     await response.edit(buttons=build_kb())
 
                 elif data == "confirm_bulk":
