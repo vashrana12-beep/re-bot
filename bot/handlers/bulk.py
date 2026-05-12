@@ -119,26 +119,26 @@ async def bulk_handler(event):
                         "Please enter a valid future time."
                     )
 
-                await conv.send_message("Repeat? (ON/OFF):")
+                await conv.send_message("Repeat? (Yes/No):")
                 repeat_msg = (await conv.get_response()).text.strip().lower()
-                if repeat_msg == "on":
+                if repeat_msg == "yes":
                     await conv.send_message("Interval in minutes:")
                     interval = _parse_positive_int((await conv.get_response()).text, "Interval")
             else:
                 await conv.send_message("Interval in minutes:")
                 interval = _parse_positive_int((await conv.get_response()).text, "Interval")
 
-            await conv.send_message("Auto Delete? (ON/OFF):")
+            await conv.send_message("Deleted? (Yes/No):")
             ad_msg = (await conv.get_response()).text.strip().lower()
             auto_delete, delete_after = False, 0
-            if ad_msg == "on":
+            if ad_msg == "yes":
                 auto_delete = True
                 await conv.send_message("Delete after minutes:")
                 delete_after = _parse_positive_int((await conv.get_response()).text, "Delete-after time")
 
-            await conv.send_message("Pin these messages? (ON/OFF):")
+            await conv.send_message("Pin? (Yes/No):")
             pin_msg = (await conv.get_response()).text.strip().lower()
-            pin_message = pin_msg == "on"
+            pin_message = pin_msg == "yes"
 
             status_msg = await conv.send_message(
                 f"Creating automations for {len(selected_chats)} chats..."

@@ -4,6 +4,22 @@ from bot.config import API_ID, API_HASH, BOT_TOKEN, OWNER_ID, logger
 from bot.database import init_db
 from bot.scheduler import scheduler, load_recovery_jobs
 import bot.scheduler as scheduler_module
+from flask import Flask
+from threading import Thread
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!", 200
+
+def run():
+    app.run(host='0.0.0.0', port=8001) # Use a different port if needed, but 8000 is common.
+
+def keep_alive():
+    t = Thread(target=run)
+    t.setDaemon(True)
+    t.start()
 
 # Import Handlers
 from bot.handlers.start import start_handler, help_handler
@@ -21,6 +37,7 @@ bot = TelegramClient('session_bot', API_ID, API_HASH)
 
 async def main():
     logger.info("Starting Bot...")
+    keep_alive()
     await bot.start(bot_token=BOT_TOKEN)
     
     # Initialize DB & Scheduler

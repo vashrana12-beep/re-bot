@@ -88,23 +88,23 @@ async def schedule_handler(event):
                     "Please enter a valid future time."
                 )
 
-            await conv.send_message("Repeat? (ON/OFF):")
+            await conv.send_message("Repeat? (Yes/No):")
             repeat_msg = (await conv.get_response()).text.strip().lower()
-            if repeat_msg == "on":
+            if repeat_msg == "yes":
                 await conv.send_message("Interval in minutes:")
                 interval = _parse_positive_int((await conv.get_response()).text, "Interval")
 
-            await conv.send_message("Auto Delete? (ON/OFF):")
+            await conv.send_message("Deleted? (Yes/No):")
             ad_msg = (await conv.get_response()).text.strip().lower()
             auto_delete, delete_after = False, 0
-            if ad_msg == "on":
+            if ad_msg == "yes":
                 auto_delete = True
                 await conv.send_message("Delete after minutes:")
                 delete_after = _parse_positive_int((await conv.get_response()).text, "Delete-after time")
 
-            await conv.send_message("Pin this message? (ON/OFF):")
+            await conv.send_message("Pin? (Yes/No):")
             pin_msg = (await conv.get_response()).text.strip().lower()
-            pin_message = pin_msg == "on"
+            pin_message = pin_msg == "yes"
 
             auto_id = await get_next_sequence("automation_id")
             auto_data = {
