@@ -68,9 +68,20 @@ async def execute_automation(automation_id: int):
         if auto["content_type"] == "text":
             msg = await bot_client.send_message(auto["chat_id"], auto["content"])
         else:
+            content_val = auto["content"]
+            if isinstance(content_val, int) or (isinstance(content_val, str) and content_val.isdigit()):
+                original_msg = await bot_client.get_messages(auto["created_by"], ids=int(content_val))
+                if original_msg and original_msg.media:
+                    media_to_send = original_msg.media
+                else:
+                    logger.error(f"Could not find original media message {content_val} in chat {auto['created_by']}")
+                    return
+            else:
+                media_to_send = content_val
+
             msg = await bot_client.send_file(
                 auto["chat_id"],
-                auto["content"],
+                media_to_send,
                 caption=auto.get("caption", "")
             )
 

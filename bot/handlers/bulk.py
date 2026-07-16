@@ -91,7 +91,7 @@ async def bulk_handler(event):
 
             content_type, content, caption = "text", content_msg.text, ""
             if content_msg.media and hasattr(content_msg, "file") and content_msg.file:
-                content = content_msg.file.id
+                content = content_msg.id
                 caption = content_msg.text or ""
                 if content_msg.photo:
                     content_type = "photo"

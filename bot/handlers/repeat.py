@@ -57,7 +57,7 @@ async def repeat_handler(event):
 
             content_type, content, caption = "text", msg.text, ""
             if msg.media and hasattr(msg, "file") and msg.file:
-                content = msg.file.id
+                content = msg.id
                 caption = msg.text or ""
                 if msg.photo:
                     content_type = "photo"
