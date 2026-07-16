@@ -2,8 +2,14 @@ import asyncio
 import datetime
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from telethon.errors import FloodWaitError
-from bot.database import automations
+from telethon.errors import (
+    FloodWaitError,
+    ChannelPrivateError,
+    ChatWriteForbiddenError,
+    UserBannedInChannelError,
+    ChannelInvalidError
+)
+from bot.database import automations, chats
 from bot.config import logger
 
 SCHEDULER_TIMEZONE = datetime.timezone.utc
@@ -111,6 +117,23 @@ async def execute_automation(automation_id: int):
     except FloodWaitError as e:
         logger.warning(f"Flood wait {e.seconds}s. Pausing execution.")
         await asyncio.sleep(e.seconds)
+    except (ChannelPrivateError, ChatWriteForbiddenError, UserBannedInChannelError, ChannelInvalidError) as e:
+        logger.warning(f"Chat inaccessible for automation {automation_id}, removing chat {auto['chat_id']}: {e}")
+        await chats.delete_one({"chat_id": auto["chat_id"]})
+        await automations.update_many(
+            {"chat_id": auto["chat_id"]},
+            {"$set": {"status": "error_deleted"}}
+        )
+    except ValueError as e:
+        if "entity" in str(e).lower() or "peer" in str(e).lower():
+            logger.warning(f"Entity not found for automation {automation_id}, removing chat {auto['chat_id']}: {e}")
+            await chats.delete_one({"chat_id": auto["chat_id"]})
+            await automations.update_many(
+                {"chat_id": auto["chat_id"]},
+                {"$set": {"status": "error_deleted"}}
+            )
+        else:
+            logger.error(f"Error executing automation {automation_id}: {e}")
     except Exception as e:
         logger.error(f"Error executing automation {automation_id}: {e}")
 
