@@ -257,28 +257,28 @@ async def execute_run_batch(run_id: int):
         await run_state.update_one({"_id": run_data["_id"]}, {"$set": {"status": "paused"}})
         return
     
-    for i, chat_id in enumerate(current_targets):
-        msg = messages_to_forward[i % len(messages_to_forward)]
-        try:
-            sent_msg = None
-            if msg.media:
-                sent_msg = await bot_client.send_file(chat_id, msg.media, caption=msg.text)
-            else:
-                sent_msg = await bot_client.send_message(chat_id, msg.text)
-            
-            if source.get("auto_delete") and source.get("delete_after_minutes"):
-                run_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=source["delete_after_minutes"])
-                scheduler.add_job(
-                    delete_message_job,
-                    "date",
-                    run_date=run_date,
-                    args=[chat_id, sent_msg.id],
-                )
-        except FloodWaitError as e:
-            logger.warning(f"Flood wait {e.seconds}s while running batch {run_id}.")
-            await asyncio.sleep(e.seconds)
-        except Exception as e:
-            logger.error(f"Error sending message to {chat_id} in run {run_id}: {e}")
+    for chat_id in current_targets:
+        for msg in messages_to_forward:
+            try:
+                sent_msg = None
+                if msg.media:
+                    sent_msg = await bot_client.send_file(chat_id, msg.media, caption=msg.text)
+                else:
+                    sent_msg = await bot_client.send_message(chat_id, msg.text)
+                
+                if source.get("auto_delete") and source.get("delete_after_minutes"):
+                    run_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=source["delete_after_minutes"])
+                    scheduler.add_job(
+                        delete_message_job,
+                        "date",
+                        run_date=run_date,
+                        args=[chat_id, sent_msg.id],
+                    )
+            except FloodWaitError as e:
+                logger.warning(f"Flood wait {e.seconds}s while running batch {run_id}.")
+                await asyncio.sleep(e.seconds)
+            except Exception as e:
+                logger.error(f"Error sending message to {chat_id} in run {run_id}: {e}")
             
     next_start_id = messages_to_forward[-1].id + 1
     next_target_idx = target_idx + batch_size
