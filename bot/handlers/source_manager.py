@@ -27,7 +27,8 @@ async def add_source_handler(event):
                 except ValueError:
                     entity_id = source_text
                 source_entity = await event.client.get_entity(entity_id)
-                source_id = source_entity.id
+                from telethon import utils
+                source_id = utils.get_peer_id(source_entity)
                 source_title = getattr(source_entity, 'title', str(source_id))
             except Exception as e:
                 return await conv.send_message(f"Could not find that channel. Ensure the bot is a member or it's public. Error: {e}")

@@ -240,7 +240,13 @@ async def execute_run_batch(run_id: int):
     
     messages_to_forward = []
     try:
-        source_entity = await bot_client.get_entity(source["source_id"])
+        try:
+            source_entity = await bot_client.get_entity(source["source_id"])
+        except ValueError:
+            if isinstance(source["source_id"], int) and source["source_id"] > 0:
+                source_entity = await bot_client.get_entity(int(f"-100{source['source_id']}"))
+            else:
+                raise
         # Fetching a larger chunk of IDs (e.g. up to 20 extra) to account for deleted messages
         ids_to_fetch = list(range(start_id, start_id + posts_limit + 20))
         msgs = await bot_client.get_messages(source_entity, ids=ids_to_fetch)
