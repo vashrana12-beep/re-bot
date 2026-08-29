@@ -15,6 +15,15 @@ async def detect_handler(event):
     if args:
         try:
             chat_id = int(args.strip())
+            try:
+                entity = await event.client.get_entity(chat_id)
+                title = getattr(entity, 'title', title)
+                if getattr(entity, 'broadcast', False):
+                    type_str = "channel"
+                elif getattr(entity, 'megagroup', False) or getattr(entity, 'gigagroup', False):
+                    type_str = "group"
+            except Exception:
+                pass
         except ValueError:
             return await event.respond("❌ Invalid Chat ID. Must be a number (e.g., -100123456789).")
     else:

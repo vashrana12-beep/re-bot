@@ -41,7 +41,16 @@ async def run_start_handler(event):
             
             all_chats = []
             async for chat in chats.find():
-                all_chats.append(chat["chat_id"])
+                chat_id = chat["chat_id"]
+                if chat.get("type") == "channel":
+                    all_chats.append(chat_id)
+                elif chat.get("type") == "channel/group":
+                    try:
+                        entity = await event.client.get_entity(chat_id)
+                        if getattr(entity, 'broadcast', False):
+                            all_chats.append(chat_id)
+                    except Exception:
+                        pass
             
             if not all_chats:
                 return await conv.send_message("No target chats registered in the bot.")
