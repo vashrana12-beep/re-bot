@@ -263,8 +263,11 @@ async def execute_run_batch(run_id: int):
         await run_state.update_one({"_id": run_data["_id"]}, {"$set": {"status": "paused"}})
         return
     
-    for chat_id in current_targets:
-        for msg in messages_to_forward:
+    # Remove duplicates just in case
+    current_targets = list(set(current_targets))
+    
+    async def send_to_chat(chat_id, messages, source_data, r_id):
+        for msg in messages:
             try:
                 sent_msg = None
                 if msg.media:
@@ -272,8 +275,8 @@ async def execute_run_batch(run_id: int):
                 else:
                     sent_msg = await bot_client.send_message(chat_id, msg.text)
                 
-                if source.get("auto_delete") and source.get("delete_after_minutes"):
-                    run_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=source["delete_after_minutes"])
+                if source_data.get("auto_delete") and source_data.get("delete_after_minutes"):
+                    run_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=source_data["delete_after_minutes"])
                     scheduler.add_job(
                         delete_message_job,
                         "date",
@@ -281,10 +284,17 @@ async def execute_run_batch(run_id: int):
                         args=[chat_id, sent_msg.id],
                     )
             except FloodWaitError as e:
-                logger.warning(f"Flood wait {e.seconds}s while running batch {run_id}.")
+                logger.warning(f"Flood wait {e.seconds}s while sending to {chat_id} in run {r_id}.")
                 await asyncio.sleep(e.seconds)
             except Exception as e:
-                logger.error(f"Error sending message to {chat_id} in run {run_id}: {e}")
+                logger.error(f"Error sending message to {chat_id} in run {r_id}: {e}")
+                
+            # Sleep 1 second between messages to the same channel to prevent rapid flood waits
+            await asyncio.sleep(1.0)
+
+    # Send to all channels in the batch concurrently
+    tasks = [send_to_chat(chat_id, messages_to_forward, source, run_id) for chat_id in current_targets]
+    await asyncio.gather(*tasks)
             
     next_start_id = messages_to_forward[-1].id + 1
     next_target_idx = target_idx + batch_size
