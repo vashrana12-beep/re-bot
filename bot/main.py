@@ -32,6 +32,8 @@ from bot.handlers.admin_manager import admin_manager_handler
 from bot.handlers.delete import delete_msg_handler
 from bot.handlers.cancel import cancel_one_handler, stopall_handler
 from bot.handlers.user_management import adduser_handler, backup_handler
+from bot.handlers.source_manager import add_source_handler, remove_source_handler, list_source_handler
+from bot.handlers.run_manager import run_start_handler, run_stop_handler, run_pause_handler, run_resume_handler
 
 bot = TelegramClient('session_bot', API_ID, API_HASH)
 
@@ -64,6 +66,13 @@ async def main():
     bot.add_event_handler(stopall_handler)
     bot.add_event_handler(adduser_handler)
     bot.add_event_handler(backup_handler)
+    bot.add_event_handler(add_source_handler)
+    bot.add_event_handler(remove_source_handler)
+    bot.add_event_handler(list_source_handler)
+    bot.add_event_handler(run_start_handler)
+    bot.add_event_handler(run_stop_handler)
+    bot.add_event_handler(run_pause_handler)
+    bot.add_event_handler(run_resume_handler)
 
     await bot.run_until_disconnected()
 

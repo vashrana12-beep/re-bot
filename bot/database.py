@@ -9,6 +9,8 @@ users = db.users
 chats = db.chats
 automations = db.automations
 counters = db.counters
+sources = db.sources
+run_state = db.run_state
 
 async def get_next_sequence(name: str) -> int:
     doc = await counters.find_one_and_update(

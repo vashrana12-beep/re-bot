@@ -9,7 +9,7 @@ from telethon.errors import (
     UserBannedInChannelError,
     ChannelInvalidError
 )
-from bot.database import automations, chats
+from bot.database import automations, chats, run_state, sources
 from bot.config import logger
 
 SCHEDULER_TIMEZONE = datetime.timezone.utc
@@ -143,6 +143,12 @@ async def load_recovery_jobs():
     async for auto in cursor:
         schedule_job(auto)
 
+    run_cursor = run_state.find({"status": "active"})
+    async for r in run_cursor:
+        src = await sources.find_one({"source_id": r["source_id"]})
+        if src:
+            schedule_run_batch(r, src)
+
 
 def schedule_job(auto_data: dict):
     job_id = f"auto_{auto_data['automation_id']}"
@@ -208,3 +214,94 @@ def schedule_job(auto_data: dict):
             id=job_id,
             args=[auto_data["automation_id"]],
         )
+
+async def execute_run_batch(run_id: int):
+    run_data = await run_state.find_one({"run_id": run_id, "status": "active"})
+    if not run_data:
+        return
+        
+    source = await sources.find_one({"source_id": run_data["source_id"]})
+    if not source:
+        logger.error(f"Source for run {run_id} not found.")
+        return
+
+    batch_size = source.get("batch_size", 5)
+    posts_limit = source.get("posts_limit", 5)
+    start_id = run_data["current_msg_id"]
+    target_idx = run_data["current_target_index"]
+    target_chats = run_data.get("target_chats", [])
+
+    if target_idx >= len(target_chats):
+        logger.info(f"Run {run_id} completed all target chats.")
+        await run_state.update_one({"_id": run_data["_id"]}, {"$set": {"status": "completed"}})
+        return
+
+    current_targets = target_chats[target_idx : target_idx + batch_size]
+    
+    messages_to_forward = []
+    try:
+        source_entity = await bot_client.get_entity(source["source_id"])
+        # Fetching a larger chunk of IDs (e.g. up to 20 extra) to account for deleted messages
+        ids_to_fetch = list(range(start_id, start_id + posts_limit + 20))
+        msgs = await bot_client.get_messages(source_entity, ids=ids_to_fetch)
+        valid_msgs = [m for m in msgs if m and not getattr(m, 'action', False)]
+        # Take only the number of posts requested
+        messages_to_forward = valid_msgs[:posts_limit]
+    except Exception as e:
+        logger.error(f"Error fetching messages from source {source['source_id']}: {e}")
+        await run_state.update_one({"_id": run_data["_id"]}, {"$set": {"status": "paused"}})
+        return
+    
+    if not messages_to_forward:
+        logger.info(f"No more messages found in source {source['source_id']} starting from {start_id}. Pausing run.")
+        await run_state.update_one({"_id": run_data["_id"]}, {"$set": {"status": "paused"}})
+        return
+    
+    for i, chat_id in enumerate(current_targets):
+        msg = messages_to_forward[i % len(messages_to_forward)]
+        try:
+            sent_msg = None
+            if msg.media:
+                sent_msg = await bot_client.send_file(chat_id, msg.media, caption=msg.text)
+            else:
+                sent_msg = await bot_client.send_message(chat_id, msg.text)
+            
+            if source.get("auto_delete") and source.get("delete_after_minutes"):
+                run_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=source["delete_after_minutes"])
+                scheduler.add_job(
+                    delete_message_job,
+                    "date",
+                    run_date=run_date,
+                    args=[chat_id, sent_msg.id],
+                )
+        except FloodWaitError as e:
+            logger.warning(f"Flood wait {e.seconds}s while running batch {run_id}.")
+            await asyncio.sleep(e.seconds)
+        except Exception as e:
+            logger.error(f"Error sending message to {chat_id} in run {run_id}: {e}")
+            
+    next_start_id = messages_to_forward[-1].id + 1
+    next_target_idx = target_idx + batch_size
+    
+    await run_state.update_one(
+        {"_id": run_data["_id"]},
+        {"$set": {
+            "current_target_index": next_target_idx,
+            "current_msg_id": next_start_id
+        }}
+    )
+
+def schedule_run_batch(run_data: dict, source_data: dict):
+    job_id = f"run_batch_{run_data['run_id']}"
+    if scheduler.get_job(job_id):
+        return
+        
+    interval = source_data.get("interval_minutes", 5)
+    
+    scheduler.add_job(
+        execute_run_batch,
+        "interval",
+        minutes=interval,
+        id=job_id,
+        args=[run_data["run_id"]]
+    )
