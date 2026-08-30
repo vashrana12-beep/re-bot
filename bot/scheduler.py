@@ -232,9 +232,7 @@ async def execute_run_batch(run_id: int):
     target_chats = run_data.get("target_chats", [])
 
     if target_idx >= len(target_chats):
-        logger.info(f"Run {run_id} completed all target chats.")
-        await run_state.update_one({"_id": run_data["_id"]}, {"$set": {"status": "completed"}})
-        return
+        target_idx = 0
 
     current_targets = target_chats[target_idx : target_idx + batch_size]
     
@@ -259,8 +257,7 @@ async def execute_run_batch(run_id: int):
         return
     
     if not messages_to_forward:
-        logger.info(f"No more messages found in source {source['source_id']} starting from {start_id}. Pausing run.")
-        await run_state.update_one({"_id": run_data["_id"]}, {"$set": {"status": "paused"}})
+        logger.info(f"No more messages found in source {source['source_id']} starting from {start_id}. Waiting for new messages.")
         return
     
     # Remove duplicates just in case
