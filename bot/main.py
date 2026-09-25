@@ -30,7 +30,14 @@ from bot.handlers.list import list_handler
 from bot.handlers.bulk import bulk_handler
 from bot.handlers.admin_manager import admin_manager_handler
 from bot.handlers.delete import delete_msg_handler
-from bot.handlers.cancel import cancel_one_handler, stopall_handler
+from bot.handlers.cancel import (
+    cancel_handler,
+    pause_handler,
+    resume_handler,
+    pause_all_handler,
+    resume_all_handler,
+    stop_all_handler
+)
 from bot.handlers.user_management import adduser_handler, backup_handler
 from bot.handlers.source_manager import add_source_handler, remove_source_handler, list_source_handler
 from bot.handlers.run_manager import run_start_handler, run_stop_handler, run_pause_handler, run_resume_handler
@@ -62,8 +69,12 @@ async def main():
     bot.add_event_handler(repeat_handler)
     bot.add_event_handler(list_handler)
     bot.add_event_handler(delete_msg_handler)
-    bot.add_event_handler(cancel_one_handler)
-    bot.add_event_handler(stopall_handler)
+    bot.add_event_handler(cancel_handler)
+    bot.add_event_handler(pause_handler)
+    bot.add_event_handler(resume_handler)
+    bot.add_event_handler(pause_all_handler)
+    bot.add_event_handler(resume_all_handler)
+    bot.add_event_handler(stop_all_handler)
     bot.add_event_handler(adduser_handler)
     bot.add_event_handler(backup_handler)
     bot.add_event_handler(add_source_handler)
