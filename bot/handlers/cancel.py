@@ -13,7 +13,7 @@ async def cancel_one_handler(event):
         scheduler.remove_job(job_id)
     await event.respond(f"✅ Cancelled ID: {auto_id}")
 
-@events.register(events.NewMessage(pattern=r'^/stopall$'))
+@events.register(events.NewMessage(pattern=r'^/stopall$|^/pause_?all$|^/pause\s+all$'))
 @requires_role("owner")
 async def stopall_handler(event):
     await automations.update_many({"status": "active"}, {"$set": {"status": "paused"}})
@@ -21,3 +21,12 @@ async def stopall_handler(event):
         if job.id.startswith("auto_"):
             job.pause()
     await event.respond("🛑 All system automations PAUSED.")
+
+@events.register(events.NewMessage(pattern=r'^/resume_?all$|^/resume\s+all$'))
+@requires_role("owner")
+async def resumeall_handler(event):
+    await automations.update_many({"status": "paused"}, {"$set": {"status": "active"}})
+    for job in scheduler.get_jobs():
+        if job.id.startswith("auto_"):
+            job.resume()
+    await event.respond("▶️ All system automations RESUMED.")
